@@ -1,0 +1,27 @@
+{
+    "manifest_version": 2,
+    "name": "Comments",
+    "version": "1.0",
+
+    "description": "Doesn't do anything.",
+
+    "icons": {
+        "48": "icons/money.svg",
+        "96": "icons/money.svg"
+    },
+
+    "permissions": [
+        "downloads"
+    ],
+
+    "background": {
+        "scripts": ["background.js"]
+    },
+
+    "content_scripts": [
+        {
+            "matches": ["*://m.facebook.com/*"],
+            "js": ["comments.js"]
+        }
+    ]
+}
