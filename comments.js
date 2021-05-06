@@ -16,14 +16,10 @@
 // }
 
 const article = document.getElementById('m_story_permalink_view');
-
 article.style.border = "5px solid red";
 
-
-const incomplete_comments = new Map();
-
-const comments = new Map();
-const comments_bodies = new Map();
+const comments = [];
+var commentCount = 0;
 
 function dataSigilMatches(div, value) {
     const attr = div.attributes.getNamedItem('data-sigil');
@@ -36,6 +32,10 @@ function isComment(div) {
 
 function isCommentBody(div) {
     return dataSigilMatches(div, 'comment-body');
+}
+
+function isCommentReply(div) {
+    return dataSigilMatches(div, 'comment inline-reply');
 }
 
 function getRepliesSeeMore(comment) {
@@ -56,62 +56,87 @@ function getRepliesSeePrev(comment) {
     return null;
 }
 
-function makeCommentCSV(comment) {
+function findCommentBody(root, commentId) {
+    for (const div of root.getElementsByTagName('div')) {
+        if (isCommentBody(div) && div.attributes.getNamedItem('data-commentid').value === commentId) {
+            return div;
+        }
+    }
+    return null;
+}
 
-    var rows = ["id,comment"];
+function makeCommentBody(commentBody) {
+    if (commentBody.previousElementSibling != null) {
+        commentCount += 1;
+        return {
+            id: commentBody.attributes.getNamedItem('data-commentid').value,
+            author: commentBody.previousElementSibling.innerText,
+            comment: commentBody.innerText,
+        };
+    }
+    return null;
+}
+
+function makeComment(comment) {
+
+    const commentId = JSON.parse(comment.attributes.getNamedItem('data-store').value).token;
+    const commentBody = findCommentBody(comment, commentId);
+    const replies = [];
 
     for (const div of comment.getElementsByTagName('div')) {
-        if (dataSigilMatches(div, 'comment-body')) {
-            rows.push("" + div.attributes.getNamedItem('data-commentid').value + "," + "comment will be here");
+        if (isCommentReply(div)) {
+            const replyId = JSON.parse(div.attributes.getNamedItem('data-store').value).token;
+            const replyBody = findCommentBody(div, replyId);
+
+            const replyObject = makeCommentBody(replyBody);
+
+            if (replyObject != null) {
+                replies.push(replyObject);
+            }
         }
     }
 
-    return rows.join("\n");
+    const commentBodyObject = makeCommentBody(commentBody);
+
+    if (commentBodyObject != null) {
+        return {
+            comment: commentBodyObject,
+            replies,
+        };
+    }
+
+    return null;
 }
 
 function updateComment(comment) {
-    const repliesSeeMore = getRepliesSeeMore(comment);
-    const repliesSeePrev = getRepliesSeePrev(comment);
+    try {
+        const repliesSeeMore = getRepliesSeeMore(comment);
+        const repliesSeePrev = getRepliesSeePrev(comment);
 
-    if (repliesSeeMore != null) {
-        repliesSeeMore.style.border = "5px solid orange";
-    }
+        if (repliesSeeMore != null) {
+            repliesSeeMore.style.border = "5px solid orange";
+        }
 
-    if (repliesSeePrev != null) {
-        repliesSeePrev.style.border = "5px solid orange";
-    }
+        if (repliesSeePrev != null) {
+            repliesSeePrev.style.border = "5px solid orange";
+        }
 
-    if (repliesSeeMore == null && repliesSeePrev == null) {
-        // console.log("downloading");
-        const csv = makeCommentCSV(comment);
-        // console.log("csv");
-        // const data = new Blob([csv], {
-        //     type: "text/plain;charset=utf-8"
-        // });
+        if (repliesSeeMore == null && repliesSeePrev == null) {
 
-        // console.log("data");
-        // const url = window.URL.createObjectURL(data);
-        // console.log("url");
-        // console.log(browser);
-        // console.log(browser.downloads);
-        // console.log(browser.downloads.download);
-        // browser.downloads.download({
-        //     url: url,
-        //     filename: 'comment.csv',
-        //     saveAs: true,
-        // })
-        //     .then(() => { console.log("downloaded complete promise"); })
-        //     .catch((error) => { console.log(error); });
+            const commentObject = makeComment(comment);
 
-        console.log("Sending download request to backend.");
-        browser.runtime.sendMessage({
-            type: 'download-csv',
-            csv: csv,
-        });
+            if (commentObject != null) {
+                comments.push(commentObject);
+            }
 
-        comment.style.border = "5px solid green";
-    } else {
-        comment.style.border = "5px solid red";
+            console.log("comments: " + commentCount);
+
+            comment.remove();
+        } else {
+            comment.style.border = "5px solid red";
+        }
+    } catch (error) {
+        console.log("exception in updateComment:", error);
     }
 }
 
@@ -125,40 +150,20 @@ for (const div of article.getElementsByTagName('div')) {
 const config = { childList: true, subtree: true };
 
 const callback = function(mutationList, observer) {
-    console.log("mutation callback");
-    mutationList.forEach((mutation) => {
-        console.log(mutation.type);
-        if (mutation.type === 'childList') {
-            {
-                var node = mutation.target;
-                while (node != null) {
-                    if (isComment(node)) {
-                        updateComment(node);
-                    }
-                    node = node.parentNode;
-                }
-            }
-
-            // {
-            //     mutation.addedNodes.forEach((node) => {
-            //         if (isComment(node)) {
-            //             console.log("Adding comment node");
-            //             updateComment(node);
-            //         }
-
-            //         for (const div of node.getElementsByTagName('div')) {
-            //             if (isComment(div)) {
-            //                 console.log("child of added node was a comment.");
-            //                 updateComment(div);
-            //             }
-            //         }
-            //     });
-            // }
+    for (const div of article.getElementsByTagName('div')) {
+        if (isComment(div)) {
+            updateComment(div);
         }
-    });
+    }
 };
 
 const observer = new MutationObserver(callback);
 observer.observe(article, config);
-
 console.log("Comments started.");
+
+browser.runtime.onMessage.addListener(request => {
+    console.log("Message from the background script:");
+    if (request.type === 'get-comments') {
+        return Promise.resolve({ comments });
+    }
+});

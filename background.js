@@ -1,37 +1,93 @@
-/*
-Log that we received the message.
-Then display a notification. The notification contains the URL,
-which we read from the message.
-*/
-function listener(message) {
+//
 
-    console.log("Background script received message.");
-    console.log(message.type);
+function escape(value) {
 
-    if (message.type === 'download-csv') {
-        console.log("downloading");
+    const textDelimiter = "\"";
+    const lineDelimiter = "\n";
 
-        const data = new Blob([message.csv], {
-            type: "text/plain;charset=utf-8"
-        });
+    const textDelimiterRegex = new RegExp("\\" + textDelimiter, 'g');
+    const lineDelimiterRegex = new RegExp("\\" + lineDelimiter, 'g');
+    const escapedDelimiter = textDelimiter + textDelimiter;
 
-        const url = window.URL.createObjectURL(data);
+    // Escape the textDelimiters contained in the field
+    value = "" + value;
+    value = value.replace(lineDelimiterRegex, " ");
+    value = value.replace(textDelimiterRegex, escapedDelimiter);
+    value = textDelimiter + value + textDelimiter;
 
-        console.log("url");
-        console.log(browser);
-        console.log(browser.downloads);
-        console.log(browser.downloads.download);
+    return value;
+};
 
-        browser.downloads.download({
-            url: url,
-            filename: 'comment.csv',
-            saveAs: true,
-        })
-            .then(() => { console.log("downloaded complete promise"); })
-            .catch((error) => { console.log(error); });
+function buildCSV(comments) {
+    const rows = [["index", "id", "author", "comment", "parent_comment", "reply_index"]];
 
-        console.log("Downloaded");
+    for (var i = 0; i < comments.length; i++) {
+        const comment = comments[i].comment;
+        const replies = comments[i].replies;
+
+        rows.push([
+            escape(i),
+            escape(comment.id),
+            escape(comment.author),
+            escape(comment.comment),
+            escape(-1),
+            escape(-1),
+        ]);
+
+        for (var j = 0; j < replies.length; j++) {
+            const reply = replies[j];
+
+            rows.push([
+                escape(i),
+                escape(reply.id),
+                escape(reply.author),
+                escape(reply.comment),
+                escape(i),
+                escape(j),
+            ]);
+        }
     }
+
+    return rows.map(row => row.join(",")).join("\n");
 }
 
-browser.runtime.onMessage.addListener(listener);
+function downloadClicked() {
+
+    function onError(error) {
+        console.error(`Error: ${error}`);
+    }
+
+    browser.tabs.query({
+        currentWindow: true,
+        active: true
+    }).then(tabs => {
+        for (let tab of tabs) {
+            browser.tabs.sendMessage(
+                tab.id,
+                {type: "get-comments"}
+            ).then(response => {
+                console.log("Got comments from the content script.");
+
+                const csv  = buildCSV(response.comments);
+                const data = new Blob([csv], { type: "text/plain;charset=utf-8" });
+                const url  = window.URL.createObjectURL(data);
+
+                browser.downloads.download({
+                    url: url,
+                    filename: 'comments.csv',
+                    saveAs: true,
+                })
+                    .then(() => { console.log("Comments downloaded."); })
+                    .catch(onError);
+
+            }).catch(onError);
+        }
+    }).catch(onError);
+}
+
+browser.pageAction.onClicked.addListener(downloadClicked);
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url.match(/.*:\/\/m.facebook.com\/.*/)) {
+    browser.pageAction.show(tab.id);
+  }
+});

@@ -11,7 +11,9 @@
     },
 
     "permissions": [
-        "downloads"
+        "downloads",
+        "tabs",
+        "activeTab"
     ],
 
     "background": {
@@ -23,5 +25,11 @@
             "matches": ["*://m.facebook.com/*"],
             "js": ["comments.js"]
         }
-    ]
+    ],
+
+
+    "page_action": {
+        "default_icon": "icons/money.svg",
+        "default_title": "Download!"
+    }
 }
