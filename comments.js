@@ -18,6 +18,13 @@
 const article = document.getElementById('m_story_permalink_view');
 article.style.border = "5px solid red";
 
+const commentCountDiv = document.createElement("div");
+commentCountDiv.style.padding = "5px";
+commentCountDiv.appendChild(document.createTextNode("0 comments stored."));
+
+article.insertBefore(commentCountDiv, article.firstElementChild);
+
+
 const comments = [];
 var commentCount = 0;
 
@@ -130,6 +137,12 @@ function updateComment(comment) {
             }
 
             console.log("comments: " + commentCount);
+
+            while (commentCountDiv.firstChild) {
+                commentCountDiv.removeChild(commentCountDiv.firstChild);
+            }
+
+            commentCountDiv.appendChild(document.createTextNode(commentCount + " comments stored."));
 
             comment.remove();
         } else {
