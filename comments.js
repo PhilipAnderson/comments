@@ -22,8 +22,7 @@ const commentCountDiv = document.createElement("div");
 commentCountDiv.style.padding = "5px";
 commentCountDiv.appendChild(document.createTextNode("0 comments stored."));
 
-article.insertBefore(commentCountDiv, article.firstElementChild);
-
+article.appendChild(commentCountDiv);
 
 const comments = [];
 var commentCount = 0;
